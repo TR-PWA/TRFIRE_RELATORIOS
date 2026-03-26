@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, ChevronRight, Camera, X, ArrowLeft, Download, CheckCircle, AlertCircle, Settings, Upload, Share2 } from 'lucide-react';
+import { FileText, ChevronRight, Camera, X, ArrowLeft, Download, CheckCircle, AlertCircle, Settings, Upload, Share2, Smartphone } from 'lucide-react';
 
 export default function App() {
   const [step, setStep] = useState(1);
@@ -8,6 +8,7 @@ export default function App() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errors, setErrors] = useState({});
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
   
   const fileInputRef = useRef(null);
 
@@ -36,8 +37,9 @@ export default function App() {
     "DANOS MATERIAIS"
   ];
 
-  // Injetar jsPDF e carregar logos salvos
+  // Injetar jsPDF, Service Worker e carregar logos salvos
   useEffect(() => {
+    // 1. Injetar jsPDF
     if (!window.jspdf) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
@@ -48,12 +50,80 @@ export default function App() {
       setPdfReady(true);
     }
 
-    // Carregar configurações salvas na memória do celular
+    // 2. Carregar configurações locais
     const savedSettings = localStorage.getItem('reportSettings');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
+
+    // 3. Preparação PWA Dinâmica (Fallback caso não use o manifest físico no GitHub)
+    const manifest = {
+      name: "Relatório Digital Bombeiro",
+      short_name: "Relatórios",
+      start_url: ".",
+      display: "standalone",
+      background_color: "#f3f4f6",
+      theme_color: "#002f5b",
+      icons: [
+        {
+          src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdib3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjU2M2ViIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTE0IDJIMzZ2MjBIMTR6Ii8+PC9zdmc+",
+          sizes: "192x192",
+          type: "image/svg+xml",
+          purpose: "any maskable"
+        },
+        {
+          src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdib3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjU2M2ViIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTE0IDJIMzZ2MjBIMTR6Ii8+PC9zdmc+",
+          sizes: "512x512",
+          type: "image/svg+xml",
+          purpose: "any maskable"
+        }
+      ]
+    };
+
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+      const manifestUrl = URL.createObjectURL(manifestBlob);
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = manifestUrl;
+      document.head.appendChild(link);
+    }
+
+    if ('serviceWorker' in navigator) {
+      // Tenta registrar SW real, se falhar, injeta um SW Blob
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        const swCode = `
+          self.addEventListener('install', (e) => e.waitUntil(self.skipWaiting()));
+          self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+          self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request).catch(() => new Response('Offline'))));
+        `;
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(console.error);
+      });
+    }
+
+    // 4. Capturar evento de instalação do Chrome (PWA)
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+      setSuccessMessage("Aplicativo instalado com sucesso!");
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -345,12 +415,25 @@ export default function App() {
             <FileText size={24} className="text-yellow-400" />
             <h1 className="text-xl font-bold tracking-wide">Relatório Digital</h1>
           </div>
-          <button 
-            onClick={() => setSettingsOpen(true)}
-            className="text-white p-2 rounded-full hover:bg-white/20 transition"
-          >
-            <Settings size={22} />
-          </button>
+          
+          {/* Menu Superior: Instalar App (Se disponível) e Engrenagem */}
+          <div className="flex items-center gap-2">
+            {installPrompt && (
+              <button 
+                onClick={handleInstallClick}
+                className="flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm"
+              >
+                <Smartphone size={14} />
+                Instalar
+              </button>
+            )}
+            <button 
+              onClick={() => setSettingsOpen(true)}
+              className="text-white p-2 rounded-full hover:bg-white/20 transition"
+            >
+              <Settings size={22} />
+            </button>
+          </div>
         </div>
 
         {/* Modal de Configurações (Logos) */}
