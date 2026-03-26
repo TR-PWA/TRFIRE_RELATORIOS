@@ -234,7 +234,7 @@
           doc.setDrawColor(0);
           doc.setLineWidth(0.3);
 
-          // Cabeçalho
+          // --- CABEÇALHO ---
           doc.rect(m, y, w, 25);
           doc.line(m + 60, y, m + 60, y + 25);
           doc.line(m + 130, y, m + 130, y + 25);
@@ -254,97 +254,132 @@
           
           y += 25;
 
-          // Tabela Metadados
+          // --- TABELA METADADOS (MAIS COMPACTA) ---
           const drawCell = (x, cellY, cellW, cellH, title, text) => {
             doc.rect(x, cellY, cellW, cellH);
-            doc.setFontSize(7);
+            doc.setFontSize(6);
             doc.setFont("helvetica", "bold");
-            doc.text(title, x + 2, cellY + 4);
-            doc.setFontSize(9);
+            doc.text(title, x + 2, cellY + 3);
+            doc.setFontSize(8);
             doc.setFont("helvetica", "normal");
-            if(text) doc.text(String(text).toUpperCase(), x + 2, cellY + 9);
+            if(text) {
+              const textLines = doc.splitTextToSize(String(text).toUpperCase(), cellW - 4);
+              doc.text(textLines, x + 2, cellY + 7);
+            }
           };
 
-          drawCell(m, y, 95, 12, "RESPONSÁVEL / BOMBEIRO CIVIL", formData.responsavel);
-          drawCell(m + 95, y, 95, 12, "MATRÍCULA", formData.matricula);
-          y += 12;
+          drawCell(m, y, 95, 10, "RESPONSÁVEL / BOMBEIRO CIVIL", formData.responsavel);
+          drawCell(m + 95, y, 95, 10, "MATRÍCULA", formData.matricula);
+          y += 10;
 
-          drawCell(m, y, w, 12, "ÁREA/LOCAL", formData.local);
-          y += 12;
+          drawCell(m, y, w, 10, "ÁREA/LOCAL", formData.local);
+          y += 10;
 
           const dateEmissao = new Date().toLocaleDateString('pt-BR');
           const timeEmissao = new Date().toLocaleTimeString('pt-BR').substring(0, 5);
           const dataOcorrencia = formData.date.split('-').reverse().join('/');
 
-          drawCell(m, y, 47.5, 12, "DATA DE EMISSÃO", dateEmissao);
-          drawCell(m + 47.5, y, 47.5, 12, "HORÁRIO EMISSÃO", timeEmissao);
-          drawCell(m + 95, y, 47.5, 12, "DATA DA OCORRÊNCIA", dataOcorrencia);
-          drawCell(m + 142.5, y, 47.5, 12, "HORÁRIO DA OCORRÊNCIA", formData.time);
+          drawCell(m, y, 47.5, 10, "DATA DE EMISSÃO", dateEmissao);
+          drawCell(m + 47.5, y, 47.5, 10, "HORÁRIO EMISSÃO", timeEmissao);
+          drawCell(m + 95, y, 47.5, 10, "DATA DA OCORRÊNCIA", dataOcorrencia);
+          drawCell(m + 142.5, y, 47.5, 10, "HORÁRIO DA OCORRÊNCIA", formData.time);
+          y += 10;
+
+          drawCell(m, y, w, 10, "SELECIONAR TIPO DE REGISTRO", formData.type);
           y += 12;
 
-          drawCell(m, y, w, 12, "SELECIONAR TIPO DE REGISTRO", formData.type);
-          y += 16;
-
-          // Textos
+          // --- TEXTOS (MAIS COMPACTOS PARA CABER NUMA PÁGINA) ---
           const drawTextSection = (title, content) => {
             if (!content) return;
             doc.setFillColor(230, 230, 230);
-            doc.rect(m, y, w, 8, 'FD');
-            doc.setFontSize(9);
+            doc.rect(m, y, w, 6, 'FD'); // Altura do título menor
+            doc.setFontSize(8);
             doc.setFont("helvetica", "bold");
-            doc.text(title, 105, y + 5.5, { align: "center" });
-            y += 8;
-            doc.setFontSize(10);
+            doc.text(title, 105, y + 4.5, { align: "center" });
+            y += 6;
+            
+            doc.setFontSize(9);
             doc.setFont("helvetica", "normal");
             const lines = doc.splitTextToSize(content, w - 4);
-            const boxHeight = (lines.length * 5) + 6;
-            if (y + boxHeight > 280) { doc.addPage(); y = m; }
+            const boxHeight = (lines.length * 4) + 4; // Espaçamento de linhas menor
+            
+            // Segurança extrema (só cria nova página se o texto for gigante, o que foge do padrão)
+            if (y + boxHeight > 280) { doc.addPage(); y = m; } 
+            
             doc.rect(m, y, w, boxHeight);
-            doc.text(lines, m + 2, y + 6);
-            y += boxHeight + 4;
+            doc.text(lines, m + 2, y + 5);
+            y += boxHeight + 3;
           };
 
           drawTextSection("DESCRIÇÃO DA OCORRÊNCIA", formData.description || "");
           drawTextSection("AÇÃO IMEDIATA / TRATATIVA", formData.action || "");
           drawTextSection("OBSERVAÇÕES", formData.observations || "");
 
-          // Imagens
+          // --- IMAGENS (LADO A LADO) ---
           if (images.length > 0) {
+            // Segurança para as imagens não quebrarem página, caso falte espaço
             if (y > 220) { doc.addPage(); y = m; }
+            
             doc.setFillColor(230, 230, 230);
-            doc.rect(m, y, w, 8, 'FD');
-            doc.setFontSize(9);
+            doc.rect(m, y, w, 6, 'FD');
+            doc.setFontSize(8);
             doc.setFont("helvetica", "bold");
-            doc.text("REGISTRO FOTOGRÁFICO", 105, y + 5.5, { align: "center" });
-            y += 10;
-            let imgX = m + 5;
-            let imgY = y;
-            let maxRowHeight = 0;
+            doc.text("REGISTRO FOTOGRÁFICO", 105, y + 4.5, { align: "center" });
+            y += 8;
+
+            const maxImgHeight = 65; // Altura máxima para não estourar a página
+            const imgSpacing = 5;
+            const totalSpacing = (images.length - 1) * imgSpacing;
+            const maxSlotWidth = (w - totalSpacing) / images.length; // Largura dividida igualmente (1, 2 ou 3)
+            
+            let currentX = m;
+            let maxActualHeight = 0;
 
             images.forEach((imgData, idx) => {
               const props = doc.getImageProperties(imgData);
-              const imgW = 85;
-              const imgH = (props.height * imgW) / props.width;
-              if (idx === 2) { imgX = 105 - (imgW / 2); imgY += maxRowHeight + 5; }
-              if (imgY + imgH > 270) { doc.addPage(); imgY = m; }
-              doc.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
-              doc.rect(imgX, imgY, imgW, imgH);
-              maxRowHeight = Math.max(maxRowHeight, imgH);
-              if (idx === 0) imgX += imgW + 10;
+              
+              // Calcula escala para caber na largura do slot E na altura máxima
+              const scaleW = maxSlotWidth / props.width;
+              const scaleH = maxImgHeight / props.height;
+              const scale = Math.min(scaleW, scaleH);
+              
+              const finalW = props.width * scale;
+              const finalH = props.height * scale;
+              
+              // Centraliza a imagem no seu "slot" caso ela seja mais estreita que o espaço disponível
+              const offsetX = currentX + (maxSlotWidth - finalW) / 2;
+              
+              doc.addImage(imgData, 'JPEG', offsetX, y, finalW, finalH);
+              doc.setDrawColor(150);
+              doc.rect(offsetX, y, finalW, finalH); // Borda cinza na foto
+              
+              // Legenda Anexo 1, 2, 3
+              doc.setFontSize(7);
+              doc.setFont("helvetica", "bold");
+              doc.text(`ANEXO ${idx + 1}`, currentX + (maxSlotWidth / 2), y + finalH + 4, { align: "center" });
+
+              if (finalH + 5 > maxActualHeight) maxActualHeight = finalH + 5;
+              
+              currentX += maxSlotWidth + imgSpacing; // Move X para a próxima imagem da mesma linha
             });
-            y = imgY + maxRowHeight + 15;
+
+            y += maxActualHeight + 10;
           }
 
-          // Assinatura
-          if (y > 260) { doc.addPage(); y = m; }
-          doc.setFontSize(10);
+          // --- ASSINATURA (SEMPRE NO FUNDO) ---
+          if (y > 275) { doc.addPage(); y = m; } 
+          else if (y < 250) { y = 265; } // Empurra a assinatura para o fim da folha para ficar bonito
+          
+          doc.setDrawColor(0);
+          doc.line(65, y, 145, y); // Linha de assinatura
+          doc.setFontSize(9);
           doc.setFont("helvetica", "bold");
-          doc.text(formData.responsavel.toUpperCase(), 105, y + 10, { align: "center" });
+          doc.text(formData.responsavel.toUpperCase(), 105, y + 5, { align: "center" });
           const extensoData = new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
           doc.setFont("helvetica", "normal");
-          doc.text(extensoData.toUpperCase(), 105, y + 16, { align: "center" });
+          doc.text(extensoData.toUpperCase(), 105, y + 10, { align: "center" });
 
-          // Finalizar
+          // --- FINALIZAR E EXPORTAR ---
           const fileName = `${formData.type.replace(/\s+/g, '_')}_${dataOcorrencia.replace(/\//g, '-')}_${formData.responsavel.split(' ')[0]}.pdf`;
           
           if (actionType === 'share') {
