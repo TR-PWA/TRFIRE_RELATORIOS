@@ -3,11 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Relatório Bombeiro Civil</title>
+  <title>TR FIRE - Relatórios Digitais</title>
   <meta name="theme-color" content="#002f5b">
   
-  <!-- Link para o Manifest do PWA -->
-  <link rel="manifest" href="./manifest.json">
+  <!-- Ícone para dispositivos Apple -->
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/792/792107.png">
+
+  <!-- Manifest PWA Injetado Dinamicamente (Garante 100% de compatibilidade no Chrome) -->
+  <script>
+    const manifestData = {
+      "name": "TR FIRE - Relatórios Digitais",
+      "short_name": "TR FIRE",
+      "start_url": window.location.pathname,
+      "display": "standalone",
+      "background_color": "#f3f4f6",
+      "theme_color": "#002f5b",
+      "icons": [
+        {
+          "src": "https://cdn-icons-png.flaticon.com/512/792/792107.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "any maskable"
+        },
+        {
+          "src": "https://cdn-icons-png.flaticon.com/512/792/792107.png",
+          "sizes": "512x512",
+          "type": "image/png",
+          "purpose": "any maskable"
+        }
+      ]
+    };
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData));
+    document.head.appendChild(manifestLink);
+  </script>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -38,6 +68,7 @@
       const [errors, setErrors] = useState({});
       const [settingsOpen, setSettingsOpen] = useState(false);
       const [installPrompt, setInstallPrompt] = useState(null);
+      const [swStatus, setSwStatus] = useState('A verificar ligação...');
       
       const fileInputRef = useRef(null);
 
@@ -74,9 +105,16 @@
 
         // Registrar Service Worker físico do GitHub
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('./sw.js').catch((err) => {
-            console.log('SW não registrado:', err);
-          });
+          navigator.serviceWorker.register('./sw.js')
+            .then(() => {
+              setSwStatus('✅ Ativo e Pronto (sw.js encontrado)');
+            })
+            .catch((err) => {
+              console.log('SW não registado:', err);
+              setSwStatus('❌ Erro: Ficheiro sw.js não encontrado no GitHub');
+            });
+        } else {
+          setSwStatus('❌ O seu navegador não suporta PWA');
         }
 
         // Evento de instalação PWA (Chrome)
@@ -95,7 +133,7 @@
         const { outcome } = await installPrompt.userChoice;
         if (outcome === 'accepted') {
           setInstallPrompt(null);
-          setSuccessMessage("Aplicativo instalado com sucesso!");
+          setSuccessMessage("Aplicação instalada com sucesso!");
           setTimeout(() => setSuccessMessage(''), 4000);
         }
       };
@@ -150,7 +188,7 @@
       const handleImageUpload = (e) => {
         const files = Array.from(e.target.files);
         if (images.length + files.length > 3) {
-          alert("Você pode anexar no máximo 3 imagens.");
+          alert("Pode anexar no máximo 3 imagens.");
           return;
         }
 
@@ -315,16 +353,16 @@
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
               try {
                 await navigator.share({ files: [file], title: 'Relatório', text: 'Segue relatório em anexo.' });
-                setSuccessMessage("Opções de compartilhamento abertas!");
-              } catch (err) { console.log("Compartilhamento cancelado", err); }
+                setSuccessMessage("Opções de partilha abertas!");
+              } catch (err) { console.log("Partilha cancelada", err); }
             } else {
-              alert("Compartilhamento nativo não suportado. O arquivo será salvo.");
+              alert("Partilha nativa não suportada. O ficheiro será guardado.");
               doc.save(fileName);
-              setSuccessMessage("Relatório salvo!");
+              setSuccessMessage("Relatório guardado!");
             }
           } else {
             doc.save(fileName);
-            setSuccessMessage("Relatório salvo com sucesso!");
+            setSuccessMessage("Relatório guardado com sucesso!");
           }
           setTimeout(() => setSuccessMessage(''), 4000);
         } catch (err) {
@@ -347,7 +385,7 @@
                   </button>
                 )}
                 <i className="ph-fill ph-file-text text-yellow-400 text-2xl"></i>
-                <h1 className="text-xl font-bold tracking-wide">Relatório Digital</h1>
+                <h1 className="text-xl font-bold tracking-wide">TR FIRE</h1>
               </div>
               
               <div className="flex items-center gap-2">
@@ -371,13 +409,22 @@
 
             {settingsOpen && (
               <div className="absolute inset-0 bg-black/60 z-50 flex flex-col justify-end">
-                <div className="bg-white rounded-t-2xl p-6 h-[85%] flex flex-col">
+                <div className="bg-white rounded-t-2xl p-6 h-[90%] flex flex-col">
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-gray-800">Configurações</h2>
                     <button onClick={() => setSettingsOpen(false)} className="p-2 bg-gray-100 rounded-full text-gray-600">
                       <i className="ph-bold ph-x text-[20px]"></i>
                     </button>
                   </div>
+                  
+                  {/* Painel de Status do PWA para Depuração */}
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-xs font-bold text-gray-700">Status do Aplicativo (PWA)</p>
+                    <p className={`text-xs mt-1 font-semibold ${swStatus.includes('✅') ? 'text-green-600' : 'text-red-500'}`}>
+                      {swStatus}
+                    </p>
+                  </div>
+
                   <p className="text-sm text-gray-500 mb-6">
                     Defina o nome da sua unidade e faça o upload dos logotipos do cabeçalho.
                   </p>
